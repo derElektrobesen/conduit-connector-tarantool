@@ -1,4 +1,4 @@
-module github.com/conduitio/conduit-connector-connectorname
+module github.com/derElektroBesen/conduit-connector-tarantool
 
 go 1.23.2
 

@@ -1,6 +1,6 @@
 //go:generate conn-sdk-cli specgen
 
-package connectorname
+package tarantool
 
 import (
 	_ "embed"

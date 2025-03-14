@@ -1,16 +1,16 @@
-package connectorname_test
+package tarantool_test
 
 import (
 	"context"
 	"testing"
 
-	connectorname "github.com/conduitio/conduit-connector-connectorname"
+	tarantool "github.com/derElektroBesen/conduit-connector-tarantool"
 	"github.com/matryer/is"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
-	con := connectorname.NewSource()
+	con := tarantool.NewSource()
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }
