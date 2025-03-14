@@ -2,28 +2,24 @@ package tarantool
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/derElektroBesen/conduit-connector-tarantool/internal/tntlogger"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 )
+
+// some value => bucket id.
+type shardFunction func(string) uint64
 
 type Destination struct {
 	sdk.UnimplementedDestination
 
-	config DestinationConfig
-}
-
-type DestinationConfig struct {
-	sdk.DefaultDestinationMiddleware
-	// Config includes parameters that are the same in the source and destination.
-	Config
-	// DestinationConfigParam must be either yes or no (defaults to yes).
-	DestinationConfigParam string `validate:"inclusion=yes|no" default:"yes"`
-}
-
-func (s *DestinationConfig) Validate(context.Context) error {
-	// Custom validation or parsing should be implemented here.
-	return nil
+	config   DestinationConfig
+	router   *vshardrouter.Router
+	bucketID shardFunction
 }
 
 func NewDestination() sdk.Destination {
@@ -35,10 +31,39 @@ func (d *Destination) Config() sdk.DestinationConfig {
 	return &d.config
 }
 
-func (d *Destination) Open(_ context.Context) error {
+func (d *Destination) Open(ctx context.Context) error {
 	// Open is called after Configure to signal the plugin it can prepare to
 	// start writing records. If needed, the plugin should open connections in
 	// this function.
+
+	topology, err := d.config.makeTopology()
+	if err != nil {
+		return fmt.Errorf("unable to make tarantool cluster topology: %w", err)
+	}
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		Loggerf: tntlogger.NewTntLogger(sdk.Logger(ctx)),
+
+		DiscoveryTimeout: time.Minute,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+
+		TotalBucketCount: d.config.TotalBuckets,
+
+		User:             d.config.User,
+		Password:         d.config.Password,
+		TopologyProvider: topology,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to create vshard router: %w", err)
+	}
+
+	d.router = router
+
+	d.bucketID = func(v string) uint64 {
+		// default shard function
+		return vshardrouter.BucketIDStrCRC32(v, router.RouterBucketCount())
+	}
+
 	return nil
 }
 
