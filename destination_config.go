@@ -5,6 +5,9 @@ import (
 	"fmt"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/google/uuid"
+	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/static"
 	"gopkg.in/yaml.v2"
 )
 
@@ -87,17 +90,17 @@ var (
 	errNoReplicaAddr = fmt.Errorf("replica addr not set")
 )
 
-func (s *DestinationConfig) Validate(context.Context) error {
-	err := yaml.Unmarshal([]byte(s.ReplicasetsYaml), &s.Replicasets)
+func (c *DestinationConfig) Validate(context.Context) error {
+	err := yaml.Unmarshal([]byte(c.ReplicasetsYaml), &c.Replicasets)
 	if err != nil {
 		return fmt.Errorf("unable to parse replicasets configuration: %w", err)
 	}
 
-	if len(s.Replicasets) == 0 {
+	if len(c.Replicasets) == 0 {
 		return errNoReplicasets
 	}
 
-	for i, c := range s.Replicasets {
+	for i, c := range c.Replicasets {
 		if err := c.Validate(); err != nil {
 			return fmt.Errorf("unable to validate replicaset %d: %w", i, err)
 		}
@@ -118,4 +121,40 @@ func (c ReplicasetConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (c *DestinationConfig) makeTopology() (vshardrouter.TopologyProvider, error) {
+	topology := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
+
+	for i, r := range c.Replicasets {
+		id, err := uuid.Parse(r.UUID)
+		if err != nil {
+			return nil, fmt.Errorf("bad UUID in replicaset %d: %q. %w",
+				i, r.UUID, err)
+		}
+
+		replicasetInfo := vshardrouter.ReplicasetInfo{
+			Name: r.Name,
+			UUID: id,
+		}
+
+		replicas := make([]vshardrouter.InstanceInfo, 0, len(r.Replicas))
+		for j, instance := range r.Replicas {
+			id, err := uuid.Parse(instance.UUID)
+			if err != nil {
+				return nil, fmt.Errorf("bad UUID in instance %d in replicaset %d: %q. %w",
+					j, i, instance.UUID, err)
+			}
+
+			replicas = append(replicas, vshardrouter.InstanceInfo{
+				Name: instance.Name,
+				Addr: instance.Addr,
+				UUID: id,
+			})
+		}
+
+		topology[replicasetInfo] = replicas
+	}
+
+	return static.NewProvider(topology), nil
 }

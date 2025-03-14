@@ -3,9 +3,8 @@ package tntlogger
 import (
 	"context"
 
-	vshardrouter "github.com/tarantool/go-vshard-router"
-
 	"github.com/rs/zerolog"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
 type defaultLogger struct {

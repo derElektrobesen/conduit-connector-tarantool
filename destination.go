@@ -8,10 +8,7 @@ import (
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/derElektroBesen/conduit-connector-tarantool/internal/tntlogger"
-	"github.com/google/uuid"
-
 	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
 )
 
 // some value => bucket id.
@@ -34,48 +31,12 @@ func (d *Destination) Config() sdk.DestinationConfig {
 	return &d.config
 }
 
-func (d *Destination) makeTopology() (vshardrouter.TopologyProvider, error) {
-	topology := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
-
-	for i, r := range d.config.Replicasets {
-		id, err := uuid.Parse(r.UUID)
-		if err != nil {
-			return nil, fmt.Errorf("bad UUID in replicaset %d: %q. %w",
-				i, r.UUID, err)
-		}
-
-		replicasetInfo := vshardrouter.ReplicasetInfo{
-			Name: r.Name,
-			UUID: id,
-		}
-
-		replicas := make([]vshardrouter.InstanceInfo, 0, len(r.Replicas))
-		for j, instance := range r.Replicas {
-			id, err := uuid.Parse(instance.UUID)
-			if err != nil {
-				return nil, fmt.Errorf("bad UUID in instance %d in replicaset %d: %q. %w",
-					j, i, instance.UUID, err)
-			}
-
-			replicas = append(replicas, vshardrouter.InstanceInfo{
-				Name: instance.Name,
-				Addr: instance.Addr,
-				UUID: id,
-			})
-		}
-
-		topology[replicasetInfo] = replicas
-	}
-
-	return static.NewProvider(topology), nil
-}
-
 func (d *Destination) Open(ctx context.Context) error {
 	// Open is called after Configure to signal the plugin it can prepare to
 	// start writing records. If needed, the plugin should open connections in
 	// this function.
 
-	topology, err := d.makeTopology()
+	topology, err := d.config.makeTopology()
 	if err != nil {
 		return fmt.Errorf("unable to make tarantool cluster topology: %w", err)
 	}
