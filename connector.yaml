@@ -3,7 +3,7 @@ specification:
   name: tarantool
   summary: A Conduit Connector for Tarantool
   description: |-
-    A destination connector for Tarantool (https://www.tarantool.io).
+    A destination connector for [Tarantool](https://www.tarantool.io).
 
     Source connector isn't implemented yet.
   version: v0.0.1
