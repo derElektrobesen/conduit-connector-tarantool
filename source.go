@@ -1,17 +1,11 @@
 package tarantool
 
-import (
-	"context"
-
-	"github.com/conduitio/conduit-commons/opencdc"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-)
+/* Source connector isn't implemented yet
 
 type Source struct {
 	sdk.UnimplementedSource
 
-	config           SourceConfig
-	lastPositionRead opencdc.Position //nolint:unused // this is just an example
+	config SourceConfig
 }
 
 type SourceConfig struct {
@@ -72,3 +66,4 @@ func (s *Source) Teardown(_ context.Context) error {
 	// graceful shutdown.
 	return nil
 }
+*/
