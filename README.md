@@ -3,11 +3,8 @@
 [Conduit](https://conduit.io) connector for <!-- readmegen:name -->Tarantool<!-- /readmegen:name -->.
 
 <!-- readmegen:description -->
-This is a detailed description of your connector.
-
-It can contain information about the features and limitations of the connector, usage instructions, etc.
-
-By default, it's inserted into the README file and Markdown syntax can be used.<!-- /readmegen:description -->
+A destination connector for Tarantool (https://www.tarantool.io)
+Source connector isn't implemented yet.<!-- /readmegen:description -->
 
 ## Source
 
