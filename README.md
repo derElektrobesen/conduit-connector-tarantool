@@ -3,7 +3,7 @@
 [Conduit](https://conduit.io) connector for <!-- readmegen:name -->Tarantool<!-- /readmegen:name -->.
 
 <!-- readmegen:description -->
-A destination connector for Tarantool (https://www.tarantool.io).
+A destination connector for [Tarantool](https://www.tarantool.io).
 
 Source connector isn't implemented yet.<!-- /readmegen:description -->
 
