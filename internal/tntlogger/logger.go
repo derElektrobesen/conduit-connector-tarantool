@@ -3,6 +3,8 @@ package tntlogger
 import (
 	"context"
 
+	vshardrouter "github.com/tarantool/go-vshard-router"
+
 	"github.com/rs/zerolog"
 )
 
@@ -10,7 +12,7 @@ type defaultLogger struct {
 	logger zerolog.Logger
 }
 
-func NewTntLogger(lg *zerolog.Logger) *defaultLogger {
+func NewTntLogger(lg *zerolog.Logger) vshardrouter.LogfProvider {
 	return &defaultLogger{
 		logger: lg.With().Str("source", "tarantool").Logger(),
 	}
