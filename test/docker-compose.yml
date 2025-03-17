@@ -1,6 +1,54 @@
-# Configure the services needed for the integration tests.
-# More information at https://docs.docker.com/compose/
 version: "3.9"
+
+networks:
+  main:
+    driver: bridge
+
+.base_tnt_cfg: &base_tnt_cfg
+  image: "conduit-tarantool:latest"
+  environment:
+    TARANTOOL_USER_NAME: user
+    TARANTOOL_USER_PASSWORD: pass
+  networks:
+    - main
+  volumes:
+    - ./tarantool/app:/opt/tarantool/app
+  working_dir: /opt/tarantool/app
+  healthcheck:
+    test: ['CMD', 'bash', '-c', 'tarantool_is_up | fgrep -q running']
+    interval: 1s
+    timeout: 20s
+    retries: 30
+
 services:
-  hello-world:
-    image: "hello-world:latest"
+  storage_1_a:
+    <<: *base_tnt_cfg
+    ports:
+      - 3301:3301
+    command: tarantool storage_1_a.lua
+  storage_1_b:
+    <<: *base_tnt_cfg
+    ports:
+      - 3302:3302
+    command: tarantool storage_1_b.lua
+  storage_1_c:
+    <<: *base_tnt_cfg
+    ports:
+      - 3303:3303
+    command: tarantool storage_1_c.lua
+
+  storage_2_a:
+    <<: *base_tnt_cfg
+    ports:
+      - 3311:3311
+    command: tarantool storage_2_a.lua
+  storage_2_b:
+    <<: *base_tnt_cfg
+    ports:
+      - 3312:3312
+    command: tarantool storage_2_b.lua
+  storage_2_c:
+    <<: *base_tnt_cfg
+    ports:
+      - 3313:3313
+    command: tarantool storage_2_c.lua
