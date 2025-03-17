@@ -37,13 +37,15 @@ var replicasetsConfig = `
       uuid: c23516d5-22de-4ef4-8918-73d52e7661e2
 `
 
-func testDestination(ctx context.Context, t *testing.T, is *is.I) (sdk.Destination, func()) {
-	is.Helper()
-
+func newContext(t *testing.T) context.Context {
 	lg := zerolog.New(
 		zerolog.NewConsoleWriter(zerolog.ConsoleTestWriter(t)),
 	).Level(zerolog.TraceLevel)
-	ctx = lg.WithContext(ctx)
+	return lg.WithContext(context.Background())
+}
+
+func newDestination(ctx context.Context, is *is.I) (sdk.Destination, func()) {
+	is.Helper()
 
 	dest := tarantool.Destination{}
 	cfg := dest.Config().(*tarantool.DestinationConfig)
@@ -65,11 +67,11 @@ func testDestination(ctx context.Context, t *testing.T, is *is.I) (sdk.Destinati
 	}
 }
 
-func TestTeardown_NoOpen(t *testing.T) {
+func TestWrite(t *testing.T) {
 	is := is.New(t)
-	ctx := context.Background()
+	ctx := newContext(t)
 
-	dst, teardown := testDestination(ctx, t, is)
+	dst, teardown := newDestination(ctx, is)
 	defer teardown()
 
 	dst.Write(ctx, nil)

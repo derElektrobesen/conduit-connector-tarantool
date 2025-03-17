@@ -11,6 +11,11 @@ import (
 	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
+var (
+	errUnsupportedOperation  = fmt.Errorf("operation isn't supported")
+	errUnsupportedCollection = fmt.Errorf("unsupported collection")
+)
+
 // some value => bucket id.
 type shardFunction func(string) uint64
 
@@ -67,17 +72,70 @@ func (d *Destination) Open(ctx context.Context) error {
 	return nil
 }
 
-func (d *Destination) Write(_ context.Context, _ []opencdc.Record) (int, error) {
+func (d *Destination) Write(ctx context.Context, recs []opencdc.Record) (int, error) {
 	// Write writes len(r) records from r to the destination right away without
 	// caching. It should return the number of records written from r
 	// (0 <= n <= len(r)) and any error encountered that caused the write to
 	// stop early. Write must return a non-nil error if it returns n < len(r).
-	return 0, nil
+
+	for i, rec := range recs {
+		switch rec.Operation {
+		case opencdc.OperationSnapshot:
+			if err := d.insertRecord(ctx, rec); err != nil {
+				return i, err
+			}
+		case opencdc.OperationCreate:
+			if err := d.insertRecord(ctx, rec); err != nil {
+				return i, err
+			}
+		case opencdc.OperationUpdate:
+			if err := d.updateRecord(ctx, rec); err != nil {
+				return i, err
+			}
+		case opencdc.OperationDelete:
+			if err := d.deleteRecord(ctx, rec); err != nil {
+				return i, err
+			}
+		default:
+			return i, errUnsupportedOperation
+		}
+	}
+
+	return len(recs), nil
 }
 
 func (d *Destination) Teardown(_ context.Context) error {
-	// Teardown signals to the plugin that all records were written and there
-	// will be no more calls to any other function. After Teardown returns, the
-	// plugin should be ready for a graceful shutdown.
+	// Nothing to close ¯\_(ツ)_/¯
+	return nil
+}
+
+func (d *Destination) getBucketID(rec opencdc.Record) (uint64, error) {
+	collection, err := rec.Metadata.GetCollection()
+	if err != nil {
+		return 0, fmt.Errorf("unable to get record collection: %w", err)
+	}
+
+	col := d.config.Collections[collection]
+	if col.GetShardingKey == nil {
+		return 0, fmt.Errorf("collection %q: %w", collection, errUnsupportedCollection)
+	}
+
+	key, err := col.GetShardingKey(rec)
+	if err != nil {
+		return 0, fmt.Errorf("bad sharding key: %w", err)
+	}
+
+	return d.bucketID(key), nil
+}
+
+func (d *Destination) insertRecord(ctx context.Context, rec opencdc.Record) error {
+	return nil
+}
+
+func (d *Destination) updateRecord(ctx context.Context, rec opencdc.Record) error {
+	return nil
+}
+
+func (d *Destination) deleteRecord(ctx context.Context, rec opencdc.Record) error {
 	return nil
 }

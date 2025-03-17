@@ -44,19 +44,28 @@ pipelines:
       - id: example
         plugin: "tarantool"
         settings:
-          # password specifies a password to access tarantool
+          # sharding_key specifies a field used to calculate bucket ID. Key
+          # could be a text template or a static value. Static value could be
+          # used if there is only one tarantool shard present.
+          # See [Referencing record
+          # fields](https://conduit.io/docs/using/processors/referencing-fields)
+          # for more info.
+          # Type: string
+          # Required: yes
+          collection.*.sharding_key: ""
+          # password specifies a password to access tarantool.
           # Type: string
           # Required: yes
           password: ""
           # replicasets specifies tarantool cluster configuration
           # Example configuration:
           #   replicasets: |-
-          #     - name: "replicaset_1"                             # optional
-          #       uuid: "ff69c808-039f-4478-9f28-27a487b3d1d3"     # optional
+          #     - name: "replicaset_1"                             # required
+          #       uuid: "ff69c808-039f-4478-9f28-27a487b3d1d3"     # required
           #       replicas:                                        # *required*
           #         - addr: "127.0.0.1:1001"                       # *required*
           #           name: "1_1"                                  # optional
-          #           uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c" # optional
+          #           uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c" # required
           #         - addr: "127.0.0.1:1002"
           #           name: "1_2"
           #           uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c"
@@ -70,11 +79,11 @@ pipelines:
           # Type: string
           # Required: yes
           replicasets: ""
-          # total_buckets specifies a number of buckets in tarantool cluster
+          # total_buckets specifies a number of buckets in tarantool cluster.
           # Type: int
           # Required: yes
           total_buckets: "0"
-          # user specifies username to access tarantool
+          # user specifies username to access tarantool.
           # Type: string
           # Required: yes
           user: ""

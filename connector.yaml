@@ -10,8 +10,22 @@ specification:
   author: Pavel Berezhnoy
   destination:
     parameters:
+      - name: collection.*.sharding_key
+        description: |-
+          sharding_key specifies a field used to calculate bucket ID.
+          Key could be a text template or a static value.
+          Static value could be used if there is only one tarantool shard
+          present.
+
+          See [Referencing record fields](https://conduit.io/docs/using/processors/referencing-fields)
+          for more info.
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
       - name: password
-        description: password specifies a password to access tarantool
+        description: password specifies a password to access tarantool.
         type: string
         default: ""
         validations:
@@ -25,9 +39,9 @@ specification:
 
             replicasets: |-
 
-              - name: "replicaset_1"                             # optional
+              - name: "replicaset_1"                             # required
 
-                uuid: "ff69c808-039f-4478-9f28-27a487b3d1d3"     # optional
+                uuid: "ff69c808-039f-4478-9f28-27a487b3d1d3"     # required
 
                 replicas:                                        # *required*
 
@@ -35,7 +49,7 @@ specification:
 
                     name: "1_1"                                  # optional
 
-                    uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c" # optional
+                    uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c" # required
 
                   - addr: "127.0.0.1:1002"
 
@@ -62,7 +76,7 @@ specification:
           - type: required
             value: ""
       - name: total_buckets
-        description: total_buckets specifies a number of buckets in tarantool cluster
+        description: total_buckets specifies a number of buckets in tarantool cluster.
         type: int
         default: ""
         validations:
@@ -71,7 +85,7 @@ specification:
           - type: greater-than
             value: "0"
       - name: user
-        description: user specifies username to access tarantool
+        description: user specifies username to access tarantool.
         type: string
         default: ""
         validations:
