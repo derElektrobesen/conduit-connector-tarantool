@@ -37,4 +37,5 @@ return {
     }, -- sharding
     replication_connect_quorum = 0,
     election_mode = "candidate"
+    bucket_count = 10000,
 }
