@@ -52,3 +52,14 @@ services:
     ports:
       - 3313:3313
     command: tarantool storage_2_c.lua
+
+  router_1:
+    <<: *base_tnt_cfg
+    command: tarantool router_1.lua
+    depends_on:
+      - storage_1_a
+      - storage_1_b
+      - storage_1_c
+      - storage_2_a
+      - storage_2_b
+      - storage_2_c

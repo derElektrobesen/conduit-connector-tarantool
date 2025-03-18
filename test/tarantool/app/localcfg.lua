@@ -36,6 +36,6 @@ return {
         }, -- replicaset #2
     }, -- sharding
     replication_connect_quorum = 0,
-    election_mode = "candidate"
+    election_mode = "candidate",
     bucket_count = 10000,
 }

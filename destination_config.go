@@ -11,8 +11,8 @@ import (
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/google/uuid"
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/static"
 	"gopkg.in/yaml.v2"
 )
 

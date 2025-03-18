@@ -2,13 +2,16 @@ package tarantool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/derElektroBesen/conduit-connector-tarantool/internal/tntlogger"
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v2/pool"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
 var (
@@ -66,7 +69,7 @@ func (d *Destination) Open(ctx context.Context) error {
 
 	d.bucketID = func(v string) uint64 {
 		// default shard function
-		return vshardrouter.BucketIDStrCRC32(v, router.RouterBucketCount())
+		return vshardrouter.BucketIDStrCRC32(v, router.BucketCount())
 	}
 
 	return nil
@@ -79,13 +82,24 @@ func (d *Destination) Write(ctx context.Context, recs []opencdc.Record) (int, er
 	// stop early. Write must return a non-nil error if it returns n < len(r).
 
 	for i, rec := range recs {
+		replicaset, err := d.replicaset(ctx, rec)
+		if err != nil {
+			return i, fmt.Errorf("can't get replicaset: %w", err)
+		}
+
+		data, err := d.makeTarantoolTuple(rec)
+		if err != nil {
+			return i, fmt.Errorf("can't make tarantool tuple: %w", err)
+		}
+
+		collection, err := rec.Metadata.GetCollection()
+		if err != nil {
+			return i, fmt.Errorf("can't understand collection name: %w", err)
+		}
+
 		switch rec.Operation {
-		case opencdc.OperationSnapshot:
-			if err := d.insertRecord(ctx, rec); err != nil {
-				return i, err
-			}
-		case opencdc.OperationCreate:
-			if err := d.insertRecord(ctx, rec); err != nil {
+		case opencdc.OperationSnapshot, opencdc.OperationCreate:
+			if err := d.insertRecord(ctx, replicaset, collection, data); err != nil {
 				return i, err
 			}
 		case opencdc.OperationUpdate:
@@ -128,7 +142,60 @@ func (d *Destination) getBucketID(rec opencdc.Record) (uint64, error) {
 	return d.bucketID(key), nil
 }
 
-func (d *Destination) insertRecord(ctx context.Context, rec opencdc.Record) error {
+func (d *Destination) replicaset(ctx context.Context, rec opencdc.Record) (pool.Pooler, error) {
+	bucket, err := d.getBucketID(rec)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get bucket id")
+	}
+
+	replicaset, err := d.router.Route(ctx, bucket)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find route for bucket %d: %w", bucket, err)
+	}
+
+	return replicaset.Pooler(), nil
+}
+
+func (d *Destination) structuredDataFormatter(data opencdc.Data) (opencdc.StructuredData, error) {
+	if data == nil {
+		return opencdc.StructuredData{}, nil
+	}
+	if sdata, ok := data.(opencdc.StructuredData); ok {
+		return sdata, nil
+	}
+	raw := data.Bytes()
+	if len(raw) == 0 {
+		return opencdc.StructuredData{}, nil
+	}
+
+	m := make(map[string]interface{})
+	err := json.Unmarshal(raw, &m)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (d *Destination) makeTarantoolTuple(rec opencdc.Record) ([]any, error) {
+	data, err := d.structuredDataFormatter(rec.Payload.After)
+	return []any{data}, err
+}
+
+func (d *Destination) insertRecord(
+	ctx context.Context,
+	replicaset pool.Pooler,
+	collection string,
+	data []any,
+) error {
+	req := tarantool.NewInsertRequest(collection).
+		Context(ctx).
+		Tuple(data)
+
+	_, err := replicaset.Do(req, pool.RW).Get()
+	if err != nil {
+		return fmt.Errorf("unable to insert tuple: %w", err)
+	}
+
 	return nil
 }
 
