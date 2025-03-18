@@ -73,3 +73,11 @@ box.once("testapp:schema:1", function()
 
 	box.snapshot()
 end)
+
+function put_tuple(space, tuple_map)
+	return box.space[space]:put(box.space[space]:frommap(tuple_map))
+end
+
+function delete_tuple(space, key)
+	return box.space[space]:delete(key)
+end

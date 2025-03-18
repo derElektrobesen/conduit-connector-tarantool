@@ -10,7 +10,6 @@ import (
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/derElektroBesen/conduit-connector-tarantool/internal/tntlogger"
-	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
@@ -83,42 +82,21 @@ func (d *Destination) Write(ctx context.Context, recs []opencdc.Record) (int, er
 	// (0 <= n <= len(r)) and any error encountered that caused the write to
 	// stop early. Write must return a non-nil error if it returns n < len(r).
 
+	var g = map[opencdc.Operation]func(opencdc.Record) (string, []any, error){
+		opencdc.OperationSnapshot: makePutRequest,
+		opencdc.OperationCreate:   makePutRequest,
+		opencdc.OperationUpdate:   makePutRequest,
+		opencdc.OperationDelete:   makeDeleteRequest,
+	}
+
 	for i, rec := range recs {
-		err := d.unmarshalRecord(ctx, &rec)
-		if err != nil {
-			return i, fmt.Errorf("can't unmarshal record: %w", err)
-		}
-
-		replicaset, err := d.replicaset(ctx, rec)
-		if err != nil {
-			return i, fmt.Errorf("can't get replicaset: %w", err)
-		}
-
-		data, err := d.makeTarantoolTuple(rec)
-		if err != nil {
-			return i, fmt.Errorf("can't make tarantool tuple: %w", err)
-		}
-
-		collection, err := rec.Metadata.GetCollection()
-		if err != nil {
-			return i, fmt.Errorf("can't understand collection name: %w", err)
-		}
-
-		switch rec.Operation {
-		case opencdc.OperationSnapshot, opencdc.OperationCreate:
-			if err := d.insertRecord(ctx, replicaset, collection, data); err != nil {
-				return i, err
-			}
-		case opencdc.OperationUpdate:
-			if err := d.updateRecord(ctx, rec); err != nil {
-				return i, err
-			}
-		case opencdc.OperationDelete:
-			if err := d.deleteRecord(ctx, rec); err != nil {
-				return i, err
-			}
-		default:
+		generator := g[rec.Operation]
+		if generator == nil {
 			return i, errUnsupportedOperation
+		}
+
+		if err := d.modify(ctx, rec, generator); err != nil {
+			return i, fmt.Errorf("unable to submit modification: %w", err)
 		}
 	}
 
@@ -148,8 +126,8 @@ func (d *Destination) Teardown(ctx context.Context) error {
 	return err
 }
 
-func (d *Destination) getKey(data opencdc.Data) (string, error) {
-	key, err := d.structuredDataFormatter(data)
+func getKey(data opencdc.Data) (string, error) {
+	key, err := formatData(data)
 	if err != nil {
 		return "", fmt.Errorf("unable to parse data: %w", err)
 	}
@@ -171,7 +149,7 @@ func (d *Destination) getBucketID(ctx context.Context, rec opencdc.Record) (uint
 		return 0, fmt.Errorf("unable to get record collection: %w", err)
 	}
 
-	key, err := d.getKey(rec.Key)
+	key, err := getKey(rec.Key)
 	if err != nil && !errors.Is(err, errBadKey) {
 		return 0, fmt.Errorf("unable to get key: %w", err)
 	}
@@ -209,29 +187,7 @@ func (d *Destination) replicaset(ctx context.Context, rec opencdc.Record) (pool.
 	return replicaset.Pooler(), nil
 }
 
-func (d *Destination) unmarshalRecord(ctx context.Context, rec *opencdc.Record) error {
-	var err error
-	rec.Key, err = d.structuredDataFormatter(rec.Key)
-	if err != nil {
-		return fmt.Errorf("unable to unmarshal key: %w", err)
-	}
-
-	lg := sdk.Logger(ctx)
-	e := lg.Trace().Any("key", rec.Key)
-
-	defer e.Msg("got record")
-
-	rec.Payload.After, err = d.structuredDataFormatter(rec.Payload.After)
-	if err != nil {
-		return fmt.Errorf("unable to unmarshal payload: %w", err)
-	}
-
-	e = e.Any("payload", rec.Payload.After)
-
-	return nil
-}
-
-func (d *Destination) structuredDataFormatter(data opencdc.Data) (opencdc.StructuredData, error) {
+func formatData(data opencdc.Data) (opencdc.StructuredData, error) {
 	if data == nil {
 		return opencdc.StructuredData{}, nil
 	}
@@ -251,33 +207,57 @@ func (d *Destination) structuredDataFormatter(data opencdc.Data) (opencdc.Struct
 	return m, nil
 }
 
-func (d *Destination) makeTarantoolTuple(rec opencdc.Record) ([]any, error) {
-	data, err := d.structuredDataFormatter(rec.Payload.After)
-	return []any{data}, err
+func makePutRequest(rec opencdc.Record) (string, []any, error) {
+	tup, err := formatData(rec.Payload.After)
+	return "put_tuple", []any{tup}, err
 }
 
-func (d *Destination) insertRecord(
-	ctx context.Context,
-	replicaset pool.Pooler,
-	collection string,
-	data []any,
-) error {
-	req := tarantool.NewInsertRequest(collection).
-		Context(ctx).
-		Tuple(data)
+func makeDeleteRequest(rec opencdc.Record) (string, []any, error) {
+	key, err := getKey(rec.Key)
+	return "delete_tuple", []any{key}, err
+}
 
-	_, err := replicaset.Do(req, pool.RW).Get()
+func (d *Destination) modify(
+	ctx context.Context,
+	rec opencdc.Record,
+	generate func(opencdc.Record) (string, []any, error),
+) error {
+	collection, err := rec.Metadata.GetCollection()
 	if err != nil {
-		return fmt.Errorf("unable to insert tuple: %w", err)
+		return fmt.Errorf("can't understand collection name: %w", err)
 	}
 
-	return nil
-}
+	tup := []any{collection}
 
-func (d *Destination) updateRecord(ctx context.Context, rec opencdc.Record) error {
-	return nil
-}
+	method, data, err := generate(rec)
+	if err != nil {
+		return fmt.Errorf("unable to generate tuple: %w", err)
+	}
 
-func (d *Destination) deleteRecord(ctx context.Context, rec opencdc.Record) error {
+	bucketID, err := d.getBucketID(ctx, rec)
+	if err != nil {
+		return fmt.Errorf("unable to get bucket id: %w", err)
+	}
+
+	resp, err := d.router.Call(
+		ctx,
+		bucketID,
+		vshardrouter.CallModeRW,
+		method,
+		append(tup, data...),
+		vshardrouter.CallOpts{Timeout: time.Second},
+	)
+
+	if err != nil {
+		return fmt.Errorf("unable to call router: %w", err)
+	}
+
+	res, err := resp.Get()
+	if err != nil {
+		return fmt.Errorf("unable to decode resp: %w", err)
+	}
+
+	sdk.Logger(ctx).Trace().Any("resp", res).Str("method", method).Msg("got response")
+
 	return nil
 }
