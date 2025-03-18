@@ -5,7 +5,7 @@ networks:
     driver: bridge
 
 .base_tnt_cfg: &base_tnt_cfg
-  image: "conduit-tarantool:latest"
+  image: 'conduit-tarantool:latest'
   environment:
     TARANTOOL_USER_NAME: user
     TARANTOOL_USER_PASSWORD: pass
@@ -63,3 +63,27 @@ services:
       - storage_2_a
       - storage_2_b
       - storage_2_c
+
+  mysql:
+    image: 'docker.io/cytopia/mysql-5.5:latest'
+    environment:
+      MYSQL_ROOT_PASSWORD: pass
+    networks:
+      - main
+    ports:
+      - 3326:3306
+    healthcheck:
+      test: ['CMD', 'mysqladmin' ,'ping', '-h', 'localhost']
+      interval: 1s
+      timeout: 20s
+      retries: 30
+
+  mysql_loader:
+    image: 'docker.io/cytopia/mysql-5.5:latest'
+    networks:
+      - main
+    depends_on:
+      - mysql
+    volumes:
+      - ./tarantool/source:/source/
+    entrypoint: /source/entrypoint.sh
