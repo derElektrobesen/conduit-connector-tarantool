@@ -72,6 +72,8 @@ services:
       - main
     ports:
       - 3326:3306
+    volumes:
+      - ./tarantool/source/conf:/etc/mysql/conf.d
     healthcheck:
       test: ['CMD', 'mysqladmin' ,'ping', '-h', 'localhost']
       interval: 1s

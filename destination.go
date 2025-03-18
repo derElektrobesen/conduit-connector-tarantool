@@ -3,6 +3,7 @@ package tarantool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 var (
 	errUnsupportedOperation  = fmt.Errorf("operation isn't supported")
 	errUnsupportedCollection = fmt.Errorf("unsupported collection")
+	errBadKey                = fmt.Errorf("unexpected key format")
 )
 
 // some value => bucket id.
@@ -82,6 +84,11 @@ func (d *Destination) Write(ctx context.Context, recs []opencdc.Record) (int, er
 	// stop early. Write must return a non-nil error if it returns n < len(r).
 
 	for i, rec := range recs {
+		err := d.unmarshalRecord(ctx, &rec)
+		if err != nil {
+			return i, fmt.Errorf("can't unmarshal record: %w", err)
+		}
+
 		replicaset, err := d.replicaset(ctx, rec)
 		if err != nil {
 			return i, fmt.Errorf("can't get replicaset: %w", err)
@@ -118,34 +125,80 @@ func (d *Destination) Write(ctx context.Context, recs []opencdc.Record) (int, er
 	return len(recs), nil
 }
 
-func (d *Destination) Teardown(_ context.Context) error {
-	// Nothing to close ¯\_(ツ)_/¯
-	return nil
+func (d *Destination) Teardown(ctx context.Context) error {
+	replicasets := d.router.RouteAll()
+
+	var err error
+
+	lg := sdk.Logger(ctx)
+	for name, r := range replicasets {
+		lg.Debug().Str("replicaset", name).Msg("closing connections")
+		p := r.Pooler()
+
+		if errs := p.Close(); len(errs) > 0 {
+			lg.Error().
+				Errs("errors", errs).
+				Str("replicaset", name).
+				Msg("unable to close connection")
+
+			err = errs[0]
+		}
+	}
+
+	return err
 }
 
-func (d *Destination) getBucketID(rec opencdc.Record) (uint64, error) {
+func (d *Destination) getKey(data opencdc.Data) (string, error) {
+	key, err := d.structuredDataFormatter(data)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse data: %w", err)
+	}
+
+	if len(key) > 1 {
+		return "", fmt.Errorf("key %+v: %w", key, errBadKey)
+	}
+
+	for _, v := range key {
+		return fmt.Sprintf("%v", v), nil
+	}
+
+	return "", fmt.Errorf("no key found: %w", errBadKey)
+}
+
+func (d *Destination) getBucketID(ctx context.Context, rec opencdc.Record) (uint64, error) {
 	collection, err := rec.Metadata.GetCollection()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get record collection: %w", err)
 	}
 
-	col := d.config.Collections[collection]
-	if col.GetShardingKey == nil {
-		return 0, fmt.Errorf("collection %q: %w", collection, errUnsupportedCollection)
+	key, err := d.getKey(rec.Key)
+	if err != nil && !errors.Is(err, errBadKey) {
+		return 0, fmt.Errorf("unable to get key: %w", err)
 	}
 
-	key, err := col.GetShardingKey(rec)
-	if err != nil {
-		return 0, fmt.Errorf("bad sharding key: %w", err)
+	col := d.config.Collections[collection]
+	switch {
+	case key == "" && col.GetShardingKey == nil:
+		return 0, fmt.Errorf("unable to get sharding key: %w", err)
+
+	case col.GetShardingKey != nil:
+		key, err = col.GetShardingKey(rec)
+		if err != nil {
+			return 0, fmt.Errorf("bad sharding key: %w", err)
+		}
+	}
+
+	if key == "" {
+		return 0, fmt.Errorf("unable to get sharding key: %w", errBadKey)
 	}
 
 	return d.bucketID(key), nil
 }
 
 func (d *Destination) replicaset(ctx context.Context, rec opencdc.Record) (pool.Pooler, error) {
-	bucket, err := d.getBucketID(rec)
+	bucket, err := d.getBucketID(ctx, rec)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get bucket id")
+		return nil, fmt.Errorf("unable to get bucket id: %w", err)
 	}
 
 	replicaset, err := d.router.Route(ctx, bucket)
@@ -154,6 +207,28 @@ func (d *Destination) replicaset(ctx context.Context, rec opencdc.Record) (pool.
 	}
 
 	return replicaset.Pooler(), nil
+}
+
+func (d *Destination) unmarshalRecord(ctx context.Context, rec *opencdc.Record) error {
+	var err error
+	rec.Key, err = d.structuredDataFormatter(rec.Key)
+	if err != nil {
+		return fmt.Errorf("unable to unmarshal key: %w", err)
+	}
+
+	lg := sdk.Logger(ctx)
+	e := lg.Trace().Any("key", rec.Key)
+
+	defer e.Msg("got record")
+
+	rec.Payload.After, err = d.structuredDataFormatter(rec.Payload.After)
+	if err != nil {
+		return fmt.Errorf("unable to unmarshal payload: %w", err)
+	}
+
+	e = e.Any("payload", rec.Payload.After)
+
+	return nil
 }
 
 func (d *Destination) structuredDataFormatter(data opencdc.Data) (opencdc.StructuredData, error) {

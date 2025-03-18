@@ -35,6 +35,7 @@ type CollectionConfig struct {
 	// Key could be a text template or a static value.
 	// Static value could be used if there is only one tarantool shard
 	// present.
+	// Only .Key.* and .Payload.After.* fields are supported
 	//
 	// See [Referencing record fields](https://conduit.io/docs/using/processors/referencing-fields)
 	// for more info.

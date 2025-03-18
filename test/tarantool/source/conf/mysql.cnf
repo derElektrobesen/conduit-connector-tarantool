@@ -1,0 +1,4 @@
+[mysqld]
+log_bin                 = /var/log/mysql/mysql-bin.log
+max_binlog_size         = 100M
+binlog_format           = row

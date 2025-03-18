@@ -3,7 +3,11 @@ package tarantool_test
 import (
 	"context"
 	"testing"
+	"time"
 
+	mysql "github.com/conduitio-labs/conduit-connector-mysql"
+	"github.com/conduitio-labs/conduit-connector-mysql/common"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	tarantool "github.com/derElektroBesen/conduit-connector-tarantool"
 	"github.com/matryer/is"
@@ -67,12 +71,40 @@ func newDestination(ctx context.Context, is *is.I) (sdk.Destination, func()) {
 	}
 }
 
+func newSource(ctx context.Context, is *is.I, tables ...string) (sdk.Source, func()) {
+	is.Helper()
+
+	src := mysql.Source{}
+	cfg := src.Config().(*common.SourceConfig)
+
+	cfg.DSN = "root:pass@tcp(127.0.0.1:3326)/mPOP"
+	cfg.Tables = tables
+
+	is.NoErr(cfg.Validate(ctx))
+	is.NoErr(src.Open(ctx, nil))
+
+	return &src, func() {
+		is.Helper()
+		is.NoErr(src.Teardown(ctx))
+	}
+}
+
 func TestWrite(t *testing.T) {
 	is := is.New(t)
-	ctx := newContext(t)
+	ctx, cancel := context.WithTimeout(newContext(t), 5*time.Second)
+	defer cancel()
 
-	dst, teardown := newDestination(ctx, is)
-	defer teardown()
+	src, srcTeardown := newSource(ctx, is, "user")
+	defer srcTeardown()
 
-	dst.Write(ctx, nil)
+	dst, dstTeardown := newDestination(ctx, is)
+	defer dstTeardown()
+
+	rec, err := src.Read(ctx)
+	is.NoErr(src.Ack(ctx, nil))
+	is.NoErr(err)
+
+	n, err := dst.Write(ctx, []opencdc.Record{rec})
+	is.NoErr(err)
+	is.Equal(1, n)
 }
