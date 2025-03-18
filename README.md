@@ -44,15 +44,54 @@ pipelines:
       - id: example
         plugin: "tarantool"
         settings:
-          # GlobalConfigParam is named global_config_param_name and needs to be
-          # provided by the user.
+          # sharding_key specifies a field used to calculate bucket ID. Key
+          # could be a text template or a static value. Static value could be
+          # used if there is only one tarantool shard present.
+          # See [Referencing record
+          # fields](https://conduit.io/docs/using/processors/referencing-fields)
+          # for more info.
           # Type: string
           # Required: yes
-          global_config_param_name: ""
-          # DestinationConfigParam must be either yes or no (defaults to yes).
+          collection.*.sharding_key: ""
+          # password specifies a password to access tarantool.
+          # Type: string
+          # Required: yes
+          password: ""
+          # replicasets specifies tarantool cluster configuration
+          # Example configuration:
+          #   replicasets: |-
+          #     - name: "replicaset_1"                             # required
+          #       uuid: "ff69c808-039f-4478-9f28-27a487b3d1d3"     # required
+          #       replicas:                                        # *required*
+          #         - addr: "127.0.0.1:1001"                       # *required*
+          #           name: "1_1"                                  # optional
+          #           uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c" # required
+          #         - addr: "127.0.0.1:1002"
+          #           name: "1_2"
+          #           uuid: "15299fc8-fb53-44dc-9a84-2332fad9687c"
+          #     - name: "replicaset_2"
+          #       uuid: "29bbdcc4-2aa8-475f-b660-4fdc20dd5052"
+          #       replicas:
+          #         - addr: "127.0.0.1:1003"
+          #           name: "2_1"
+          #         - addr: "127.0.0.1:1004"
+          #           name: "2_2"
+          # Type: string
+          # Required: yes
+          replicasets: ""
+          # total_buckets specifies a number of buckets in tarantool cluster.
+          # Type: int
+          # Required: yes
+          total_buckets: "0"
+          # user specifies username to access tarantool.
+          # Type: string
+          # Required: yes
+          user: ""
+          # shard_function specifies a shard function to be used during
+          # sharding. At now only default sharding function is supported.
           # Type: string
           # Required: no
-          destinationConfigParam: "yes"
+          shard_function: "default"
           # Maximum delay before an incomplete batch is written to the
           # destination.
           # Type: duration
