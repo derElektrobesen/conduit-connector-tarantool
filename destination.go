@@ -208,11 +208,29 @@ func formatData(data opencdc.Data) (opencdc.StructuredData, error) {
 }
 
 func makePutRequest(rec opencdc.Record) (string, []any, error) {
+	// Following function should exists and
+	// tarantool user shoud have enough privileges to call it.
+	// That's required because there is no simple method to
+	// create a tuple with specified format.
+	//
+	// function put_tuple(space, tuple_map)
+	//     return box.space[space]:put(box.space[space]:frommap(tuple_map))
+	// end
+
 	tup, err := formatData(rec.Payload.After)
 	return "put_tuple", []any{tup}, err
 }
 
 func makeDeleteRequest(rec opencdc.Record) (string, []any, error) {
+	// Following function should exists and
+	// tarantool user shoud have enough privileges to call it.
+	// This function is just a sugar: it simplifies go-code and
+	// doesn't cause any problems because of put_tuple function is required.
+	//
+	// function delete_tuple(space, key)
+	//     return box.space[space]:delete(key)
+	// end
+
 	key, err := getKey(rec.Key)
 	return "delete_tuple", []any{key}, err
 }

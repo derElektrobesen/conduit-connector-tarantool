@@ -38,20 +38,20 @@ end)
 box.once("testapp:schema:1", function()
 	local user = box.schema.space.create('user')
 	user:format({
-		{ 'ID', 'unsigned' },
-		{ 'CAGId', 'number' },
-		{ 'Domain', 'unsigned' },
-		{ 'Username', 'string' },
-		{ 'Flags', 'unsigned' },
-		{ 'MailboxLimit', 'unsigned' },
-		{ 'Forward', 'string' },
-		{ 'RealName', 'string' },
-		{ 'Comment', 'string' },
-		{ 'Storage', 'string' },
-		{ 'Target', 'string' },
-		{ 'PwdCode', 'unsigned' },
-		{ 'AttachStorage', 'string' },
-		{ 'Flags2', 'unsigned' },
+		{ 'ID',            'unsigned' },
+		{ 'CAGId',         'number'   },
+		{ 'Domain',        'unsigned' },
+		{ 'Username',      'string'   },
+		{ 'Flags',         'unsigned' },
+		{ 'MailboxLimit',  'unsigned' },
+		{ 'Forward',       'string'   },
+		{ 'RealName',      'string'   },
+		{ 'Comment',       'string'   },
+		{ 'Storage',       'string'   },
+		{ 'Target',        'string'   },
+		{ 'PwdCode',       'unsigned' },
+		{ 'AttachStorage', 'string'   },
+		{ 'Flags2',        'unsigned' },
 	})
 
 	user:create_index('primary',    { parts = { 'ID' }, sequence = true, unique = true })
